@@ -35,94 +35,85 @@ class _SignupScreenState extends State<SignupScreen> {
     super.dispose();
   }
 
-  Future<void> _signUp() async {
-    // Form validation
-    if (_nameController.text.trim().isEmpty ||
-        _emailController.text.trim().isEmpty ||
-        _phoneController.text.trim().isEmpty ||
-        _passwordController.text.isEmpty) {
-      setState(() {
-        _errorMessage = 'Please fill in all required fields';
-      });
-      return;
-    }
-
-    if (_passwordController.text != _confirmPasswordController.text) {
-      setState(() {
-        _errorMessage = 'Passwords do not match';
-      });
-      return;
-    }
-
+Future<void> _signUp() async {
+  // Form validation
+  if (_nameController.text.trim().isEmpty ||
+      _emailController.text.trim().isEmpty ||
+      _phoneController.text.trim().isEmpty ||
+      _passwordController.text.isEmpty) {
     setState(() {
-      _isLoading = true;
-      _errorMessage = null;
+      _errorMessage = 'Please fill in all required fields';
     });
+    return;
+  }
 
-    try {
-      // Sign up with Supabase Auth
-      final AuthResponse response = await Supabase.instance.client.auth.signUp(
-        email: _emailController.text.trim(),
-        password: _passwordController.text.trim(),
-        data: {
-          'full_name': _nameController.text.trim(),
-          'phone_number': _phoneController.text.trim(),
-        },
+  if (_passwordController.text != _confirmPasswordController.text) {
+    setState(() {
+      _errorMessage = 'Passwords do not match';
+    });
+    return;
+  }
+
+  if (!_agreeToTerms) {
+    setState(() {
+      _errorMessage = 'You must agree to the Terms and Conditions and Privacy Policy.';
+    });
+    return;
+  }
+
+  setState(() {
+    _isLoading = true;
+    _errorMessage = null;
+  });
+
+  try {
+    // Sign up with Supabase Auth
+    final AuthResponse response = await Supabase.instance.client.auth.signUp(
+      email: _emailController.text.trim(),
+      password: _passwordController.text.trim(),
+      data: {
+        'full_name': _nameController.text.trim(),
+        'phone_number': _phoneController.text.trim(),
+      },
+    );
+
+    if (!mounted) return;
+
+    if (response.user != null) {
+      // Show success message
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Account created! Please check your email to verify your account.'),
+          duration: Duration(seconds: 5),
+      ));
+
+      // Always redirect to login page after signup
+      Navigator.of(context).pushAndRemoveUntil(
+        MaterialPageRoute(builder: (context) => const LoginScreen()),
+        (route) => false,
       );
-
-      // Check if user was created successfully
-      if (response.user != null) {
-        try {
-          // Insert user data into the users table
-          await Supabase.instance.client.from('users').insert({
-            'id': response.user!.id,
-            'full_name': _nameController.text.trim(),
-            'email': _emailController.text.trim(),
-            'phone_number': _phoneController.text.trim(),
-            'created_at': DateTime.now().toIso8601String(),
-          }).select();
-
-          // Give time for database operation to complete
-          await Future.delayed(const Duration(milliseconds: 500));
-
-          if (!mounted) return;
-          
-          // Navigate to dashboard with replacement (prevents going back to signup)
-          Navigator.of(context).pushAndRemoveUntil(
-            MaterialPageRoute(builder: (context) => const DashboardScreen()),
-            (route) => false,
-          );
-        } catch (dbError) {
-          // Handle database insertion error specifically
-          debugPrint('Database error: $dbError');
-          setState(() {
-            _errorMessage = 'Error saving user data. Please try again.';
-            _isLoading = false;
-          });
-        }
-      } else {
-        // Handle case where user is null but no exception was thrown
-        setState(() {
-          _errorMessage = 'Failed to create account. Please try again.';
-          _isLoading = false;
-        });
-      }
-    } on AuthException catch (error) {
-      // Handle specific auth errors
-      debugPrint('Auth error: ${error.message}');
+    } else {
       setState(() {
-        _errorMessage = error.message;
-        _isLoading = false;
-      });
-    } catch (error) {
-      // Handle any other errors
-      debugPrint('Unexpected error: $error');
-      setState(() {
-        _errorMessage = 'An unexpected error occurred. Please try again.';
+        _errorMessage = 'Failed to create account. Please try again.';
         _isLoading = false;
       });
     }
+  } on AuthException catch (error) {
+    debugPrint('Auth error: ${error.message}');
+    if (!mounted) return;
+    setState(() {
+      _errorMessage = error.message;
+      _isLoading = false;
+    });
+  } catch (error) {
+    debugPrint('Unexpected error: $error');
+    if (!mounted) return;
+    setState(() {
+      _errorMessage = 'An unexpected error occurred. Please try again.';
+      _isLoading = false;
+    });
   }
+}
 
   @override
   Widget build(BuildContext context) {
